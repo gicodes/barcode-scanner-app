@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "barcode4nodejs": "^9.6.47",
+    "express": "^4.19.2"
+  }
+}
