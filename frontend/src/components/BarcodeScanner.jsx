@@ -1,53 +1,84 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const BarcodeScanner = () => {
-  const [barcode, setBarcode] = useState('');
-  const imageRef = useRef(null);
+  const videoRef = useRef(null);
+  const [scanning, setScanning] = useState(false);
+  const streamRef = useRef(null); // To store the camera stream
 
   useEffect(() => {
-    // Check if BarcodeDetector is supported
-    if (typeof window.BarcodeDetector === "undefined") {
-      console.log("Barcode Detector is not supported by this browser.");
-    } else {
-      console.log("Barcode Detector supported!");
+    if (scanning) {
+      // Access the webcam
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          streamRef.current = stream; // Store the stream in a ref
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
 
-      const barcodeDetector = new window.BarcodeDetector({
-        formats: ["code_39", "codabar", "ean_13"],
-      });
+          // Set up an interval to capture frames periodically
+          const captureInterval = setInterval(() => {
+            captureFrame();
+          }, 100); // Adjust the interval as needed
 
-      // Add onload event to ensure the image is fully loaded
-      imageRef.current.onload = () => {
-        barcodeDetector.detect(imageRef.current)
-          .then((barcodes) => {
-            if (barcodes.length > 0) {
-              setBarcode(barcodes[0].rawValue);
-            } else {
-              setBarcode("No barcodes detected.");
+          return () => {
+            clearInterval(captureInterval);
+            if (streamRef.current) {
+              // Stop all tracks of the stream when scanning stops
+              streamRef.current.getTracks().forEach((track) => track.stop());
             }
-          })
-          .catch((err) => {
-            console.log("Barcode detection failed:", err);
-            setBarcode(`Barcode detection failed: ${err.message}`);
-          });
-      };
-
-      imageRef.current.onerror = (err) => {
-        console.log("Image failed to load:", err);
-      };
+          };
+        })
+        .catch((err) => console.error('Error accessing webcam: ', err));
+    } else {
+      // When scanning is stopped, stop the video stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null; // Reset the stream ref
+      }
     }
-  }, []);
+  }, [scanning]);
+
+  const captureFrame = () => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const video = videoRef.current;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      if (blob) { 
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+
+        fetch('http://localhost:2020/process-frame', {
+          method: 'POST',
+          body: formData,
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log('Detected results:', data);
+          })
+          .catch((err) => console.error('Error sending frame to server: ', err));
+      } else {
+        console.error('Failed to convert canvas to Blob');
+      }
+    }, 'image/jpeg');
+  };
 
   return (
     <div>
-      <img
-        ref={imageRef}
-        src="/barcode-sample.jpg"  // Replace with the correct image path
-        alt="Barcode Sample"
-        style={{ maxWidth: '300px', margin: '20px 0' }}
-      />
-      <div>
-        <strong>Detected Barcode:</strong> {barcode}
-      </div>
+      <h2>Scan A Barcode</h2>
+      <div className='scan-card'>
+        <video ref={videoRef} autoPlay playsInline />
+      </div>      
+      <button 
+        className='scan-btn'
+        onClick={() => setScanning(!scanning)}
+      >
+        {scanning ? 'Stop Scanning' : 'Start Scanning'}
+      </button>
     </div>
   );
 };
