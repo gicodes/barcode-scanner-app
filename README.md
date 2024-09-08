@@ -1,4 +1,4 @@
-# Scan-A-Barcode
+# Barcode-Scanner-App
 **Real-Time Barcode and QR Code Scanner**
 
     This is a full-stack web application that allows users to scan barcodes and QR codes in real-time using their webcam. 
